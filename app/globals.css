@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  /* Deep Navy Blue */
+  --color-navy-50: #eef2f9;
+  --color-navy-100: #d7e0ef;
+  --color-navy-200: #b0c2df;
+  --color-navy-300: #829cc7;
+  --color-navy-400: #5577ab;
+  --color-navy-500: #36598f;
+  --color-navy-600: #264572;
+  --color-navy-700: #1b3457;
+  --color-navy-800: #122440;
+  --color-navy-900: #0b1830;
+  --color-navy-950: #060f20;
+
+  /* Industrial Grey */
+  --color-steel-50: #f6f7f8;
+  --color-steel-100: #e9ebee;
+  --color-steel-200: #d3d8de;
+  --color-steel-300: #aeb7c2;
+  --color-steel-400: #8492a1;
+  --color-steel-500: #657486;
+  --color-steel-600: #515d6e;
+  --color-steel-700: #434c5a;
+  --color-steel-800: #3a414c;
+  --color-steel-900: #333942;
+  --color-steel-950: #22262d;
+
+  /* Orange accent */
+  --color-accent-50: #fff5ed;
+  --color-accent-100: #ffe8d5;
+  --color-accent-200: #fecdaa;
+  --color-accent-300: #fdaa74;
+  --color-accent-400: #fb7d3c;
+  --color-accent-500: #f95d16;
+  --color-accent-600: #ea430c;
+  --color-accent-700: #c2300c;
+  --color-accent-800: #9a2812;
+  --color-accent-900: #7c2412;
+  --color-accent-950: #430f07;
+
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-white text-steel-800 antialiased;
+}
+
+/* Scroll-reveal animation, driven by the Reveal component */
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease-out, transform 0.7s ease-out;
+}
+
+.reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Continuous marquee for the client logo carousel */
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.animate-marquee {
+  animation: marquee 38s linear infinite;
+}
+
+.marquee-mask {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    black 8%,
+    black 92%,
+    transparent
+  );
+}
+
+/* Subtle industrial blueprint grid used behind dark sections */
+.bg-grid {
+  background-image: linear-gradient(
+      rgba(255, 255, 255, 0.04) 1px,
+      transparent 1px
+    ),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
