@@ -1,0 +1,333 @@
+// ACE Contracting — EPC Site Management Platform
+// Database schema. SQLite for development; switch provider to "postgresql" for production.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Users & Access Control ───────────────────────────
+
+// Roles: ADMIN, PROJECT_MANAGER, SITE_SUPERVISOR, PROCUREMENT, HR
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  nameAr       String? // Arabic display name
+  role         String   @default("SITE_SUPERVISOR")
+  phone        String?
+  designation  String?
+  locale       String   @default("en") // en | ar
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  managedProjects   Project[]         @relation("ProjectManager")
+  supervisedSites   Site[]            @relation("SiteSupervisor")
+  manpowerLogs      ManpowerLog[]
+  materialRequests  MaterialRequest[] @relation("Requestor")
+  approvedRequests  MaterialRequest[] @relation("Approver")
+  equipmentBookings EquipmentBooking[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  attendanceMarked  Attendance[]      @relation("MarkedBy")
+
+  @@index([role])
+  @@index([email])
+}
+
+// ─────────────────────────── Projects & Sites ───────────────────────────
+
+// Status: PLANNED, ACTIVE, ON_HOLD, COMPLETED
+model Project {
+  id          String    @id @default(cuid())
+  code        String    @unique // e.g. ACE-2026-001
+  name        String
+  nameAr      String?
+  clientName  String
+  description String?
+  status      String    @default("ACTIVE")
+  startDate   DateTime
+  endDate     DateTime?
+  progressPct Float     @default(0) // completion percentage 0-100
+  managerId   String?
+  manager     User?     @relation("ProjectManager", fields: [managerId], references: [id])
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  sites Site[]
+
+  @@index([status])
+  @@index([managerId])
+}
+
+model Site {
+  id           String   @id @default(cuid())
+  code         String   @unique // e.g. SITE-RWS-01
+  name         String
+  nameAr       String?
+  location     String // human-readable, e.g. "Ruwais, Abu Dhabi"
+  emirate      String? // Abu Dhabi | Dubai | Sharjah | ...
+  latitude     Float?
+  longitude    Float?
+  status       String   @default("ACTIVE")
+  projectId    String
+  project      Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supervisorId String?
+  supervisor   User?    @relation("SiteSupervisor", fields: [supervisorId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  employees         Employee[]
+  manpowerLogs      ManpowerLog[]
+  attendance        Attendance[]
+  materialRequests  MaterialRequest[]
+  equipmentBookings EquipmentBooking[]
+  equipmentOnSite   Equipment[]        @relation("EquipmentLocation")
+  dailyReports      DailyReport[]
+
+  @@index([projectId])
+  @@index([supervisorId])
+  @@index([status])
+}
+
+// ─────────────────────────── Workforce ───────────────────────────
+
+// Trades: WELDER, FABRICATOR, PIPE_FITTER, RIGGER, ELECTRICIAN,
+// INSTRUMENT_TECH, HELPER, DRIVER, OPERATOR, OTHER
+model Employee {
+  id         String   @id @default(cuid())
+  empCode    String   @unique // company employee ID, e.g. ACE-EMP-0001
+  name       String
+  nameAr     String?
+  trade      String   @default("OTHER")
+  company    String   @default("ACE Contracting") // or subcontractor name
+  phone      String?
+  siteId     String? // current assigned site
+  site       Site?    @relation(fields: [siteId], references: [id])
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  manpowerLogs ManpowerLog[]
+  attendance   Attendance[]
+
+  @@index([siteId])
+  @@index([trade])
+  @@index([empCode])
+}
+
+model ManpowerLog {
+  id           String   @id @default(cuid())
+  date         DateTime // log date (midnight UTC)
+  siteId       String
+  site         Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  employeeId   String
+  employee     Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  trade        String
+  company      String
+  hoursWorked  Float    @default(8)
+  remarks      String?
+  createdById  String?
+  createdBy    User?    @relation(fields: [createdById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@unique([date, siteId, employeeId])
+  @@index([date])
+  @@index([siteId, date])
+  @@index([trade])
+}
+
+// Status: PRESENT, ABSENT, HALF_DAY, LEAVE
+// Method: MANUAL, QR, BIOMETRIC, GPS  (future-ready)
+model Attendance {
+  id            String    @id @default(cuid())
+  date          DateTime
+  employeeId    String
+  employee      Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  siteId        String
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  status        String    @default("PRESENT")
+  checkIn       DateTime?
+  checkOut      DateTime?
+  overtimeHours Float     @default(0)
+  method        String    @default("MANUAL")
+  gpsLatitude   Float? // for GPS attendance (future)
+  gpsLongitude  Float?
+  deviceRef     String? // QR / biometric device reference (future)
+  remarks       String?
+  markedById    String?
+  markedBy      User?     @relation("MarkedBy", fields: [markedById], references: [id])
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([date, employeeId])
+  @@index([siteId, date])
+  @@index([date])
+  @@index([status])
+}
+
+// ─────────────────────────── Material Requests ───────────────────────────
+
+// Priority: CRITICAL, HIGH, MEDIUM, LOW
+// Status workflow: SUBMITTED → UNDER_REVIEW → APPROVED → PO_CREATED →
+//                  ORDERED → IN_TRANSIT → DELIVERED → CLOSED  (or REJECTED)
+model MaterialRequest {
+  id            String    @id @default(cuid())
+  requestNo     String    @unique // auto-generated: MR-2026-00001
+  date          DateTime  @default(now())
+  siteId        String
+  site          Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  requestorId   String
+  requestor     User      @relation("Requestor", fields: [requestorId], references: [id])
+  designation   String?
+  priority      String    @default("MEDIUM")
+  status        String    @default("SUBMITTED")
+  justification String?
+  drawingRef    String?
+  attachmentUrl String?
+  requiredDate  DateTime?
+  poNumber      String? // purchase order reference
+  approverId    String?
+  approver      User?     @relation("Approver", fields: [approverId], references: [id])
+  approvedAt    DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  items         MaterialRequestItem[]
+  statusHistory MaterialRequestStatusLog[]
+
+  @@index([siteId])
+  @@index([status])
+  @@index([priority])
+  @@index([date])
+}
+
+model MaterialRequestItem {
+  id           String          @id @default(cuid())
+  requestId    String
+  request      MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  description  String
+  materialCode String?
+  quantity     Float
+  unit         String // pcs, m, kg, ton, ltr, set, ...
+  remarks      String?
+
+  @@index([requestId])
+}
+
+model MaterialRequestStatusLog {
+  id        String          @id @default(cuid())
+  requestId String
+  request   MaterialRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  fromState String?
+  toState   String
+  byUserId  String?
+  note      String?
+  createdAt DateTime        @default(now())
+
+  @@index([requestId])
+}
+
+// ─────────────────────────── Equipment ───────────────────────────
+
+// Status: AVAILABLE, IN_USE, MAINTENANCE, OUT_OF_SERVICE
+model Equipment {
+  id              String    @id @default(cuid())
+  code            String    @unique // e.g. EQ-CRN-01
+  name            String
+  nameAr          String?
+  category        String // MOBILE_CRANE, FORKLIFT, BOOM_LIFT, SCISSOR_LIFT, EXCAVATOR, GENERATOR, WELDING_MACHINE, COMPRESSOR, OTHER
+  status          String    @default("AVAILABLE")
+  currentSiteId   String?
+  currentSite     Site?     @relation("EquipmentLocation", fields: [currentSiteId], references: [id])
+  nextMaintenance DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  bookings EquipmentBooking[]
+
+  @@index([category])
+  @@index([status])
+}
+
+// Status: CONFIRMED, CANCELLED, COMPLETED
+model EquipmentBooking {
+  id          String    @id @default(cuid())
+  equipmentId String
+  equipment   Equipment @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  siteId      String
+  site        Site      @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  bookedById  String
+  bookedBy    User      @relation(fields: [bookedById], references: [id])
+  startTime   DateTime
+  endTime     DateTime
+  purpose     String
+  status      String    @default("CONFIRMED")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([equipmentId, startTime, endTime])
+  @@index([siteId])
+  @@index([startTime])
+}
+
+// ─────────────────────────── Daily Reports ───────────────────────────
+
+model DailyReport {
+  id            String   @id @default(cuid())
+  date          DateTime
+  siteId        String
+  site          Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  progressNotes String
+  safetyNotes   String?
+  weather       String?
+  blockers      String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  @@unique([date, siteId])
+  @@index([siteId, date])
+}
+
+// ─────────────────────────── Notifications & Audit ───────────────────────────
+
+// Type: MATERIAL_CRITICAL, APPROVAL_PENDING, DELIVERY_UPDATE,
+//       BOOKING_CONFLICT, ATTENDANCE_ALERT, SYSTEM
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   @default("SYSTEM")
+  title     String
+  message   String
+  link      String? // in-app deep link
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String // CREATE, UPDATE, DELETE, LOGIN, APPROVE, STATUS_CHANGE, ...
+  entity    String // table/module name
+  entityId  String?
+  details   String? // JSON payload of the change
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([userId])
+  @@index([createdAt])
+}

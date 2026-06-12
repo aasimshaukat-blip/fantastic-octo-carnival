@@ -1,0 +1,25 @@
+node_modules/
+.next/
+out/
+build/
+dist/
+
+# database
+prisma/dev.db
+prisma/dev.db-journal
+*.sqlite
+
+# env
+.env
+.env.local
+.env.production
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+*.tsbuildinfo
+next-env.d.ts
+
+# uploads
+public/uploads/
