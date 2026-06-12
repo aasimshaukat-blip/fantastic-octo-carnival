@@ -12,12 +12,13 @@ conflict prevention, notifications, reports, and audit trails.
 ## Quick start
 
 ```bash
-npm install
-cp .env.example .env          # set AUTH_SECRET for anything beyond local dev
-npx prisma db push            # create the SQLite dev database
-npm run db:seed               # load realistic UAE demo data
-npm run dev                   # http://localhost:3000
+npm install      # install dependencies
+npm run setup    # create config + database + demo logins (one command)
+npm run dev      # start the app at http://localhost:3000
 ```
+
+New to this? See the plain-English, step-by-step guide in
+[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md).
 
 ### Demo logins
 
